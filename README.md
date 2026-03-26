@@ -9,9 +9,26 @@ Airwindows PowerSag: Dynamic, load-dependent voltage sag that makes the whole th
 The code is still a skeleton — many sections (full ADSR, better filter implementations, modulation matrix, preset loading) are left as stubs for you to flesh out.
 
 
-# In your repo root
-git checkout main
-# Paste my code into Source/
-# cmake --build . --config Release
-# Run standalone → Hear hybrid 4X + Vintage warmth
+cmake_minimum_required(VERSION 3.15)
+project(Sogitec4X_Vintage)
+
+set(CMAKE_CXX_STANDARD 17)
+
+# Source files
+file(GLOB SOURCES "Sources/*.cpp" "Effects/*.cpp")
+
+add_executable(sogitec4x ${SOURCES} Sources/Voice.h Params.h)
+
+# Math library
+target_link_libraries(sogitec4x m)
+
+# Optimization
+target_compile_options(sogitec4x PRIVATE -O3 -march=native -ffast-math)
+
+# Usage: ./sogitec4x test.wav  # Generates test audio
+## Quick Build & Test
+```bash
+mkdir build && cd build
+cmake .. && make -j
+./sogitec4x test.wav  # Plays hybrid tones to WAV
 
