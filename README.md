@@ -9,4 +9,9 @@ Airwindows PowerSag: Dynamic, load-dependent voltage sag that makes the whole th
 The code is still a skeleton — many sections (full ADSR, better filter implementations, modulation matrix, preset loading) are left as stubs for you to flesh out.
 
 
+# In your repo root
+git checkout main
+# Paste my code into Source/
+# cmake --build . --config Release
+# Run standalone → Hear hybrid 4X + Vintage warmth
 
