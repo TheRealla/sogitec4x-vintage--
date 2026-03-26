@@ -1,0 +1,110 @@
+// Sogitec4X.h — Hybrid 1981 IRCAM 4X + Behringer Vintage + Airwindows PowerSag
+// Polyphony: 16 voices | 44.1kHz optimized | Sample-accurate
+
+#pragma once
+#include <vector>
+#include <array>
+#include <cmath>
+#include <algorithm>
+#include <random>
+#include <string>
+
+constexpr double PI = 3.141592653589793;
+constexpr int MAX_PARTIALS = 32;
+
+class Voice {
+public:
+    Voice(double sampleRate);
+
+    void process(float* outL, float* outR, int numSamples, const struct Params& params);
+    void noteOn(float hz, float vel);
+    void noteOff();
+    bool isActive() const { return gate || ampEnv > 0.001f; }
+
+    float noteHz = 440.0f;
+    float velocity = 1.0f;
+
+private:
+    double sr, srInv;
+    double osc1Phase = 0.0, osc2Phase = 0.0, subPhase = 0.0;
+    double lfo1Phase = 0.0, lfo2Phase = 0.0;
+    double masterPhase = 0.0;
+
+    // Envelopes
+    double ampEnv = 0.0, modEnv = 0.0;
+    double ampPhase = 0.0;  // For simplified ADSR timing
+
+    bool gate = false;
+
+    // Internal state for filters and sag
+    double f1Z1 = 0.0, f1Z2 = 0.0, f2Z1 = 0.0, f2Z2 = 0.0;
+    double sagMemory = 1.0;
+    double loadMemory = 0.0;
+
+    void advancePhases(const Params& p);
+    float getOscillator(int oscIdx, const Params& p);  // 0=osc1, 1=osc2, 2=sub
+    float noiseGen(const Params& p);
+    float filterSection(float input, const Params& p);
+    float applyPowerSag(float input, const Params& p);
+    void updateEnvelopes(const Params& p);
+};
+
+struct Params {
+    // Oscillators (Behringer Vintage style)
+    float osc1Wave = 1.0f;      // 0=sine, 1=saw, 2=square, 3=triangle
+    float osc2Wave = 2.0f;
+    float subLevel = 0.5f;
+    float noiseLevel = 0.0f;
+    float noiseColor = 0.5f;    // 0=dark, 1=bright
+    float osc1Tune = 0.0f, osc2Tune = 0.0f;
+    float osc1Level = 0.8f, osc2Level = 0.8f;
+
+    bool hardSync = false;
+    float pwmAmount = 0.0f;     // Pulse width modulation depth
+
+    float unisonVoices = 1.0f;  // 1 to ~8
+    float unisonDetune = 0.0f;
+
+    // Filters
+    float filter1Cutoff = 0.7f, filter1Res = 0.2f;
+    float filter2Cutoff = 0.6f, filter2Res = 0.1f;
+    int filter1Type = 0;        // 0=LP12, 1=LP24, 2=HP, 3=BP, 4=Notch, 5=Formant
+    bool serialMode = true;
+    float driveAmount = 0.3f;   // Harmonic saturation
+    float driveCurve = 0.5f;    // 0=soft, 1=hard
+
+    // LFOs (two, with destinations)
+    float lfo1Rate = 0.3f, lfo1Amt = 0.0f;
+    float lfo2Rate = 0.1f, lfo2Amt = 0.0f;
+    int lfo1Dest = 1;           // 0=pitch, 1=cutoff, 2=pwm
+    int lfo2Dest = 0;
+
+    // Envelopes (simplified ADSR)
+    float ampAttack = 0.01f, ampDecay = 0.3f, ampSustain = 0.7f, ampRelease = 0.4f;
+
+    // Character
+    float driftAmount = 0.05f;      // Analog instability
+    float powerSagDepth = 0.25f;    // Airwindows-style PSU sag
+    float glideTime = 0.0f;
+};
+
+class Sogitec4X {
+public:
+    explicit Sogitec4X(double sampleRate);
+
+    void noteOn(float midiNote, float velocity);
+    void noteOff(float midiNote);
+    void process(float** outputs, int numSamples);
+    void setParam(const std::string& name, float value);
+
+private:
+    double sampleRate;
+    Params params;
+    std::vector<Voice> voices;
+    std::vector<Voice*> activeVoices;
+    std::mt19937 driftRng{42};
+    std::normal_distribution<double> driftDist{0.0, 1.0};
+
+    Voice* getFreeVoice();
+    void updateGlide(double deltaTime);
+};
