@@ -207,3 +207,11 @@ float unisonDetunes[8];
 float partials[32];
 double lfo1Phase = 0;
 ADSR ampADSR, modEnv;
+
+// In your Voice.cpp process loop:
+Filter filt1, filt2;
+float sourceSig = hybridOscMix();  // From previous code
+float filtOut1 = filt1.process(sourceSig, params.filter1Cutoff, params.filter1Res, params.filter1Type, params.driveAmount, params.driveCurve);
+float filtOut2 = filt2.process(sourceSig, params.filter2Cutoff, params.filter2Res, params.filter2Type, params.driveAmount, params.driveCurve);
+float filtered = params.serialFilters ? filtOut2 : 0.5f * (filtOut1 + filtOut2);
+filtered = powerSag.process(filtered);  // Final analog character
