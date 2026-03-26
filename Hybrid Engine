@@ -1,0 +1,7 @@
+// In your OscProcessor.cpp — ADD THIS LAYER
+float hybridOsc() {
+    float digital = additiveBank(partials);      // Your 4X code
+    float analog = vintageVCO(osc1, osc2, sub);  // My Behringer model
+    return mix(digital * 0.4 + analog * 0.6);
+}
+
