@@ -39,13 +39,6 @@ cmajor-player sol-dpkva.cmajor
 
 # 3. Export WAV test
 cmajor-render sol-dpkva.cmajor -duration 10s -outfile demo.wav
-# 1. Cmajor Player (instant)
-cmajor-player sol-dpkva.cmajor
-
-# 2. VS Code → Run → Hear keytracking magic
-
-# 3. Export WAV test
-cmajor-render sol-dpkva.cmajor -duration 10s -outfile demo.wav
 
 
 
