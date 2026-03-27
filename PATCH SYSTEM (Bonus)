@@ -1,0 +1,8 @@
+gstruct Patch {
+    Params params;
+    std::string name;
+};
+
+void Voice::loadPatch(const Patch& patch) {
+    currentParams = patch.params;
+}
