@@ -1,0 +1,141 @@
+// sogitec-opticlink-hybrid.cmaj
+// Sogitec OpticLink Hybrid — 1981 IRCAM 4X + Behringer Vintage + PowerSag + SOL-DPKVA
+// Ready for Amorph artists: evolving pads, textures, drones, experimental sound design
+
+processor SogitecOpticLinkHybrid
+{
+    input stream float32 in;           // optional external audio input
+    output stream float32 out;
+
+    // ==================== PARAMETERS (tweakable by artists) ====================
+    // VA Oscillators (Behringer Vintage style)
+    input value float osc1Wave = 1.0;      // 0=sine, 1=saw, 2=square, 3=triangle
+    input value float osc2Wave = 2.0;
+    input value float osc1Level = 0.8;
+    input value float osc2Level = 0.8;
+    input value float subLevel = 0.5;
+    input value float noiseLevel = 0.15;
+    input value float noiseColor = 0.6;
+    input value bool  hardSync = false;
+    input value float pwmAmount = 0.0;
+    input value float unisonDetune = 0.05;
+
+    // Sogitec 4X Additive Layer
+    input value float additiveBlend = 0.3;   // 0 = pure VA, 1 = heavy 32-harmonic partials
+
+    // PowerSag (Airwindows-style breathing analog character)
+    input value float powerSagDepth = 0.28;
+
+    // SOL-DPKVA Fiber-Optic Filter (double-pole HP + LP with key/vel automation)
+    input value float filterLP = 0.75;       // base LP cutoff (0-1)
+    input value float filterHP = 0.1;        // base HP cutoff (0-1)
+    input value float filterRes = 0.25;
+    input value float keyTrack = 0.5;        // key tracking strength
+    input value float velMod = 0.6;          // velocity/pressure response
+
+    // Performance
+    input value float glideTime = 0.08;
+
+    // Internal state
+    float osc1Phase = 0, osc2Phase = 0, subPhase = 0;
+    float lfoPhase = 0;
+    float sagMemory = 1.0;
+    float loadMemory = 0.0;
+
+    // SOL-DPKVA double-pole SVF state
+    float lp1=0, bp1=0, hp1=0, lp2=0, bp2=0, hp2=0;
+
+    float prewarp(float freq, float sr) {
+        let omega = 2.0 * pi * freq / sr;
+        return 2.0 * sr * tan(omega * 0.5);
+    }
+
+    // 32-harmonic Sogitec additive oscillator
+    float digitalOsc(float phase) {
+        float sig = 0.0;
+        for (int k = 1; k <= 32; ++k) {
+            sig += sin(phase * float(k)) / float(k);
+        }
+        return sig * 0.15;
+    }
+
+    // Simple VA oscillator
+    float vaOsc(float phase, int waveType, float pwm) {
+        switch (waveType) {
+            case 0: return sin(phase);                  // sine
+            case 1: return phase / pi - 1.0;            // saw
+            case 2: return (phase < pi * pwm) ? 1.0 : -1.0; // square + PWM
+            case 3: return abs(sin(phase));             // triangle
+            default: return sin(phase);
+        }
+    }
+
+    void main()
+    {
+        let sampleRate = 96000.0;   // change to host SR if needed
+        let srInv = 1.0 / sampleRate;
+
+        loop
+        {
+            // === MIDI automation for SOL-DPKVA (Amorph artists love this) ===
+            // In real use, connect these from host MIDI events
+            let midiNote = 69.0;     // demo A4 — replace with live MIDI note input
+            let velocity = 0.85;     // demo velocity/pressure
+            let pressure = 0.0;
+
+            // SOL-DPKVA automation
+            let baseLP = filterLP * 18000.0;
+            let baseHP = filterHP * 120.0;
+            let keyMod = ((midiNote - 60.0) / 48.0) * keyTrack * 0.6;
+            let pressMod = (velocity * 0.8 + pressure * 0.2) * velMod * 2400.0;
+
+            let lpCutoff = clamp(baseLP * (1.0 + keyMod) + pressMod * 0.7, 200.0, 22000.0);
+            let hpCutoff = clamp(baseHP * (1.0 + keyMod * 0.5) - pressMod * 0.3, 20.0, 8000.0);
+            let res = clamp(filterRes * (1.0 + velocity * 0.4), 0.0, 1.0);
+
+            // === Hybrid synthesis core ===
+            let phaseInc = 440.0 * 2.0 * pi * srInv;   // demo frequency — replace with live pitch
+
+            osc1Phase = fmod(osc1Phase + phaseInc, 2.0 * pi);
+            osc2Phase = fmod(osc2Phase + phaseInc * 1.02, 2.0 * pi); // slight detune
+            subPhase  = fmod(subPhase  + phaseInc * 0.5, 2.0 * pi);
+
+            float vaSig = vaOsc(osc1Phase, int(osc1Wave), 0.5 + pwmAmount * 0.5) * osc1Level +
+                          vaOsc(osc2Phase, int(osc2Wave), 0.5 + pwmAmount * 0.5) * osc2Level +
+                          sin(subPhase) * subLevel +
+                          (random() * 2.0 - 1.0) * noiseLevel;   // white noise with color stub
+
+            float additiveSig = digitalOsc(osc1Phase);
+
+            float mixed = (1.0 - additiveBlend) * vaSig + additiveBlend * additiveSig;
+
+            // === PowerSag (breathing analog character) ===
+            let rectifier = abs(mixed);
+            loadMemory = 0.99 * loadMemory + 0.01 * rectifier;
+            sagMemory *= exp(-0.1 * powerSagDepth * loadMemory * srInv);
+            sagMemory = max(0.5, sagMemory);
+            mixed *= sagMemory;
+
+            // === SOL-DPKVA double-pole filter ===
+            let lpK = prewarp(lpCutoff, sampleRate) * srInv;
+            let hpK = prewarp(hpCutoff, sampleRate) * srInv;
+            let damp = 1.0 / (1.0 + 2.0 * res);
+
+            // First pole
+            hp1 = (mixed - lp1 - bp1 * damp) / (1.0 + lpK * lpK);
+            bp1 += lpK * hp1;
+            lp1 += lpK * bp1;
+
+            // Second pole
+            hp2 = (hp1 - lp2 - bp2 * damp) / (1.0 + hpK * hpK);
+            bp2 += hpK * hp2;
+            lp2 += hpK * bp2;
+
+            // Transparent fiber-optic blend
+            let filtered = lp2 * 0.7 + hp2 * 0.3;
+
+            out <- filtered * 0.8;   // master gain
+            advance();
+        }
+    }
+}
